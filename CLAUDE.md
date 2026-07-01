@@ -77,6 +77,21 @@ warnings intact in README, `.env.example`, and the example UI. When adding
 features, prefer paths where a user can supply their **own** client id, and
 never remove the "bring your own client id" affordances.
 
+## Releasing (Changesets)
+
+Versioning/publishing is managed by [Changesets](https://github.com/changesets/changesets).
+
+- After a user-facing change, add a changeset: `pnpm changeset` (pick packages +
+  bump level, write a summary). Commit the generated `.changeset/*.md`.
+- On push to `main`, `.github/workflows/release.yml` either opens/updates a
+  "Version Packages" PR (when changesets are pending) or publishes to npm (when
+  none are pending and versions aren't yet on the registry).
+- Publishing requires an `NPM_TOKEN` repo secret. Packages are scoped
+  (`@oauth-ai/*`) and publish with public access.
+- Note: the provider packages have `@oauth-ai/core` as a **peerDependency**, so
+  Changesets escalates them to a **major** bump whenever core changes. Review
+  the Version PR before merging.
+
 ## Adding a provider
 
 1. New package `packages/<name>` mirroring `packages/openai` (package.json,

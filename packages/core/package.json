@@ -5,6 +5,14 @@
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harshtomar6/oauth-ai.git",
+    "directory": "packages/core"
+  },
   "files": ["dist"],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
