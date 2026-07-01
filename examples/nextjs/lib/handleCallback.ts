@@ -4,6 +4,7 @@ import { baseUrl, isSupportedProvider, oauth } from "@/lib/oauth";
 
 interface Pending {
   provider: string;
+  mode?: string;
   state: string;
   codeVerifier?: string;
   redirectUri: string;
@@ -41,7 +42,7 @@ export async function handleLoopbackCallback(
 
   try {
     const tokens = await oauth.exchangeCode(pending.provider, {
-      mode: "loopback",
+      mode: pending.mode === "manual" ? "manual" : "loopback",
       code,
       state,
       codeVerifier: pending.codeVerifier,

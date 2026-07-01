@@ -3,10 +3,12 @@ import { NextResponse } from "next/server";
 import { isSupportedProvider, oauth } from "@/lib/oauth";
 
 /**
- * GET /api/oauth-ai/connect/:provider
- * Starts the loopback OAuth flow. The redirect URI must use the provider's
- * registered loopback path (Claude: /callback, OpenAI: /auth/callback) on this
- * app's own origin — arbitrary paths are rejected by the first-party clients.
+ * GET /api/oauth-ai/connect/:provider[?mode=manual]
+ *
+ * - loopback (default): redirect straight to the provider; it returns to this
+ *   app's registered loopback path (Claude /callback, OpenAI /auth/callback).
+ * - manual: start the copy-paste flow and send the user to /manual, which opens
+ *   the provider and collects the pasted code.
  */
 export async function GET(
   request: Request,
@@ -17,25 +19,39 @@ export async function GET(
     return NextResponse.json({ error: "unknown provider" }, { status: 404 });
   }
 
-  const origin = new URL(request.url).origin;
-  const cfg = oauth.getProvider(provider);
-  const redirectUri = `${origin}${cfg.loopbackPath ?? "/callback"}`;
+  const reqUrl = new URL(request.url);
+  const mode = reqUrl.searchParams.get("mode") === "manual" ? "manual" : "loopback";
 
-  const { url, state, pkce } = await oauth.startAuthorization(provider, {
-    mode: "loopback",
-    redirectUri,
-  });
+  let start;
+  try {
+    if (mode === "manual") {
+      // redirectUri resolves to the provider's console callback automatically.
+      start = await oauth.startAuthorization(provider, { mode: "manual" });
+    } else {
+      const cfg = oauth.getProvider(provider);
+      const redirectUri = `${reqUrl.origin}${cfg.loopbackPath ?? "/callback"}`;
+      start = await oauth.startAuthorization(provider, { mode: "loopback", redirectUri });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "failed to start authorization";
+    return NextResponse.redirect(
+      `${reqUrl.origin}/connected?provider=${provider}&error=${encodeURIComponent(msg)}`,
+    );
+  }
 
-  const response = NextResponse.redirect(url);
-  // Persist everything the callback needs. Use a signed/encrypted session in
-  // production; this demo uses a single short-lived httpOnly cookie.
+  // manual → land on our /manual page; loopback → straight to the provider.
+  const destination = mode === "manual" ? `${reqUrl.origin}/manual` : start.url;
+  const response = NextResponse.redirect(destination);
   response.cookies.set(
     "oauthai_pending",
     JSON.stringify({
       provider,
-      state,
-      codeVerifier: pkce?.codeVerifier,
-      redirectUri,
+      mode,
+      state: start.state,
+      codeVerifier: start.pkce?.codeVerifier,
+      redirectUri: start.redirectUri,
+      // Only used by the manual page to link the user to the provider.
+      authorizeUrl: mode === "manual" ? start.url : undefined,
     }),
     {
       httpOnly: true,

@@ -14,9 +14,22 @@ export default function Home() {
         Add “Connect with OpenAI” / “Connect with Claude” to any app.
       </p>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "2rem" }}>
+      <div style={{ display: "flex", gap: "0.75rem", marginTop: "2rem", flexWrap: "wrap" }}>
         <ConnectButton provider="openai" />
         <ConnectButton provider="anthropic" />
+      </div>
+
+      <div style={{ marginTop: "1rem" }}>
+        <ConnectButton
+          provider="anthropic"
+          href="/api/oauth-ai/connect/anthropic?mode=manual"
+          label="Connect with Claude (manual / copy-paste)"
+          style={{ background: "#6b7280" }}
+        />
+        <p style={{ color: "#888", fontSize: "0.8125rem", marginTop: "0.5rem" }}>
+          Manual mode works anywhere (no loopback port needed): Claude shows a
+          code you paste back. This is the only option for hosted sites today.
+        </p>
       </div>
 
       <p style={{ color: "#888", fontSize: "0.875rem", marginTop: "2rem" }}>
