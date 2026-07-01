@@ -30,11 +30,17 @@ export const ANTHROPIC_DEFAULT_CLIENT_ID =
   "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
 /**
- * Default scopes. `org:create_api_key` is intentionally omitted — it triggers
- * "Unknown scope" errors on subscription (claude.ai) logins. Add it back via
- * `createAnthropicProvider({ scopes })` only when targeting a Console org.
+ * Default scopes. This matches the set used by working Claude Code login
+ * implementations; omitting `org:create_api_key` causes claude.ai to reject the
+ * authorization request. (Some Claude Code versions have a separate "Unknown
+ * scope" regression with this scope — override via `createAnthropicProvider({
+ * scopes })` if you hit that.)
  */
-export const ANTHROPIC_DEFAULT_SCOPES = ["user:profile", "user:inference"];
+export const ANTHROPIC_DEFAULT_SCOPES = [
+  "org:create_api_key",
+  "user:profile",
+  "user:inference",
+];
 
 export interface AnthropicProviderOptions {
   clientId?: string;
