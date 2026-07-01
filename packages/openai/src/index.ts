@@ -31,7 +31,22 @@ export const OPENAI_DEFAULT_SCOPES = [
   "profile",
   "email",
   "offline_access",
+  "api.connectors.read",
+  "api.connectors.invoke",
 ];
+
+/**
+ * Extra authorize params the Codex "Sign in with ChatGPT" flow requires. Without
+ * these flow flags, auth.openai.com rejects the request. `originator` is a client
+ * surface label. (The `*_stable_id` telemetry UUIDs Codex Desktop also sends are
+ * optional — add them via `authorizeParams` / call-site `extraParams` if needed.)
+ */
+export const OPENAI_DEFAULT_AUTHORIZE_PARAMS: Record<string, string> = {
+  id_token_add_organizations: "true",
+  codex_cli_simplified_flow: "true",
+  codex_streamlined_login: "true",
+  originator: "codex_cli",
+};
 
 export interface OpenAIProviderOptions {
   clientId?: string;
@@ -40,6 +55,8 @@ export interface OpenAIProviderOptions {
   redirectUri?: string;
   /** Override the loopback port (defaults to 1455). */
   loopbackPort?: number;
+  /** Merge/override the default authorize params (flow flags, originator, ...). */
+  authorizeParams?: Record<string, string>;
 }
 
 /** Create an OpenAI provider with your own client id / options. */
@@ -61,6 +78,10 @@ export function createOpenAIProvider(
     supportedModes: ["loopback"],
     loopbackPort: options.loopbackPort ?? OPENAI_LOOPBACK_PORT,
     loopbackPath: "/auth/callback",
+    authorizeParams: {
+      ...OPENAI_DEFAULT_AUTHORIZE_PARAMS,
+      ...options.authorizeParams,
+    },
   });
   if (options.clientSecret) config.clientSecret = options.clientSecret;
   if (options.redirectUri) config.defaultRedirectUri = options.redirectUri;
