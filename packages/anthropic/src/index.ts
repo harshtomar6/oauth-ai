@@ -16,10 +16,10 @@ function readEnv(name: string): string | undefined {
  */
 export const ANTHROPIC_AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 export const ANTHROPIC_TOKEN_URL =
-  "https://platform.claude.com/v1/oauth/token";
+  "https://console.anthropic.com/v1/oauth/token";
 /** Fixed console callback used by the manual copy-paste flow. */
 export const ANTHROPIC_MANUAL_REDIRECT_URI =
-  "https://platform.claude.com/oauth/code/callback";
+  "https://console.anthropic.com/oauth/code/callback";
 
 /**
  * Claude Code's first-party client id. Works, but belongs to Anthropic's own
