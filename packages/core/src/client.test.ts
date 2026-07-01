@@ -100,11 +100,98 @@ describe("startAuthorization", () => {
     ).rejects.toThrow(/Unknown provider/);
   });
 
-  it("throws when no redirectUri is available", async () => {
+  it("throws when a loopback port cannot be resolved", async () => {
     const oauth = new OAuthAI({ providers: [pkceProvider] });
     await expect(oauth.startAuthorization("test")).rejects.toThrow(
-      /No redirectUri/,
+      /needs a port/,
     );
+  });
+});
+
+describe("flow modes", () => {
+  const multiMode: ProviderConfig = defineProvider({
+    id: "multi",
+    name: "Multi",
+    authorizeUrl: "https://auth.multi/authorize",
+    tokenUrl: "https://auth.multi/token",
+    clientId: "m-1",
+    defaultScopes: ["s"],
+    supportedModes: ["loopback", "manual"],
+    loopbackPath: "/callback",
+    manualRedirectUri: "https://console.multi/oauth/code/callback",
+    manualAuthorizeParams: { code: "true" },
+    includeStateInTokenRequest: true,
+    stripCodeFragment: true,
+  });
+
+  it("builds a loopback redirect_uri from the port", async () => {
+    const oauth = new OAuthAI({ providers: [multiMode] });
+    const { url, redirectUri, mode } = await oauth.startAuthorization("multi", {
+      mode: "loopback",
+      loopbackPort: 3000,
+    });
+    expect(mode).toBe("loopback");
+    expect(redirectUri).toBe("http://localhost:3000/callback");
+    expect(new URL(url).searchParams.get("redirect_uri")).toBe(
+      "http://localhost:3000/callback",
+    );
+    // Manual-only params must not leak into loopback mode.
+    expect(new URL(url).searchParams.get("code")).toBeNull();
+  });
+
+  it("uses the console callback + manual params in manual mode", async () => {
+    const oauth = new OAuthAI({ providers: [multiMode] });
+    const { url, redirectUri, mode } = await oauth.startAuthorization("multi", {
+      mode: "manual",
+    });
+    expect(mode).toBe("manual");
+    expect(redirectUri).toBe("https://console.multi/oauth/code/callback");
+    expect(new URL(url).searchParams.get("code")).toBe("true");
+  });
+
+  it("rejects an unsupported mode", async () => {
+    const loopbackOnly: ProviderConfig = defineProvider({
+      id: "lo",
+      name: "Lo",
+      authorizeUrl: "https://a/authorize",
+      tokenUrl: "https://a/token",
+      clientId: "c",
+      supportedModes: ["loopback"],
+      loopbackPort: 1234,
+    });
+    const oauth = new OAuthAI({ providers: [loopbackOnly] });
+    await expect(
+      oauth.startAuthorization("lo", { mode: "manual" }),
+    ).rejects.toThrow(/does not support mode "manual"/);
+  });
+
+  it("strips a #fragment and sends state in the token request", async () => {
+    const { fn, calls } = mockFetch({ access_token: "at" });
+    const oauth = new OAuthAI({ providers: [multiMode], fetch: fn });
+    await oauth.exchangeCode("multi", {
+      mode: "manual",
+      code: "REALCODE#deadbeef",
+      codeVerifier: "v",
+      state: "st-123",
+    });
+    const body = formBody(calls[0]?.init);
+    expect(body.get("code")).toBe("REALCODE");
+    expect(body.get("state")).toBe("st-123");
+    expect(body.get("redirect_uri")).toBe(
+      "https://console.multi/oauth/code/callback",
+    );
+  });
+
+  it("requires state when the provider needs it", async () => {
+    const { fn } = mockFetch({ access_token: "at" });
+    const oauth = new OAuthAI({ providers: [multiMode], fetch: fn });
+    await expect(
+      oauth.exchangeCode("multi", {
+        mode: "manual",
+        code: "c",
+        codeVerifier: "v",
+      }),
+    ).rejects.toThrow(/requires `state`/);
   });
 });
 

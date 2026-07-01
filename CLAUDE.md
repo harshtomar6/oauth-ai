@@ -44,9 +44,24 @@ Always run `pnpm build && pnpm typecheck && pnpm test` before committing. CI
 ## Architecture notes
 
 - **The flow lives server-side.** `OAuthAI.startAuthorization()` returns
-  `{ url, state, pkce }`; the caller persists `state` + `pkce.codeVerifier`
-  (e.g. signed cookie/session) and redirects to `url`. The callback route
-  validates `state`, then calls `exchangeCode()` with the stored verifier.
+  `{ url, state, mode, redirectUri, pkce }`; the caller persists
+  `state` + `pkce.codeVerifier` + `redirectUri` (e.g. signed cookie/session) and
+  redirects to `url`. The callback route validates `state`, then calls
+  `exchangeCode()` with the stored verifier, the same `redirectUri`, and `state`.
+- **Flow modes (`loopback` | `manual`).** First-party client ids only allow
+  registered redirect URIs, so there is no arbitrary hosted-redirect flow:
+  - `loopback` → `http://localhost:<port><loopbackPath>` (Claude `/callback`
+    port-agnostic; OpenAI `/auth/callback` on fixed port 1455).
+  - `manual` → provider console callback + copy-paste (Claude only; adds
+    `code=true`).
+  Provider configs carry the mode-specific fields (`supportedModes`,
+  `loopbackPath`, `loopbackPort`, `manualRedirectUri`, `manualAuthorizeParams`).
+- **Provider token quirks live in `ProviderConfig`, not in `client.ts`.**
+  Anthropic sets `includeStateInTokenRequest` (state required in the token body)
+  and `stripCodeFragment` (the returned `code#fragment` is split on `#`). Add new
+  quirks as declarative flags, not provider `if`-branches in the client.
+- Anthropic's default scopes deliberately omit `org:create_api_key` — it causes
+  "Unknown scope" on claude.ai subscription logins.
 - **`fetch` is injectable** via `OAuthAIOptions.fetch` — tests pass a mock;
   don't reach for global fetch mocking.
 - **`TokenStore` is pluggable.** `MemoryTokenStore` is dev-only. Real apps key

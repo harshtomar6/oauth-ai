@@ -21,8 +21,21 @@ export default function Home() {
 
       <p style={{ color: "#888", fontSize: "0.875rem", marginTop: "2rem" }}>
         Each button links to <code>/api/oauth-ai/connect/&lt;provider&gt;</code>,
-        which starts the OAuth (PKCE) flow and redirects you to the provider.
+        which starts the OAuth (PKCE) <strong>loopback</strong> flow and redirects
+        you to the provider, then back to a registered callback path.
       </p>
+
+      <ul style={{ color: "#888", fontSize: "0.8125rem", lineHeight: 1.7 }}>
+        <li>
+          <strong>Claude</strong> works on this app as-is — its loopback redirect
+          is port-agnostic (<code>http://localhost:3000/callback</code>).
+        </li>
+        <li>
+          <strong>OpenAI</strong> requires the Codex loopback port:
+          run <code>PORT=1455 pnpm dev</code> so the redirect
+          (<code>http://localhost:1455/auth/callback</code>) is accepted.
+        </li>
+      </ul>
 
       <p
         style={{

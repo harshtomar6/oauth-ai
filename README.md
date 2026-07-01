@@ -25,22 +25,44 @@ const oauth = new OAuthAI({
   store: new MemoryTokenStore(),
 });
 
-// 1. Start the flow (server-side): redirect the user to `url`, persist `state` + pkce.
-const { url, state, pkce } = await oauth.startAuthorization("openai", {
-  redirectUri: "https://yourapp.com/api/oauth-ai/callback/openai",
-});
+// 1. Start the flow (server-side). Persist state + pkce + the resolved
+//    redirectUri; redirect the user to `url`.
+const { url, state, pkce, redirectUri } = await oauth.startAuthorization(
+  "anthropic",
+  { mode: "loopback", redirectUri: "http://localhost:3000/callback" },
+);
 
-// 2. In your callback route: validate `state`, then exchange the code.
-const tokens = await oauth.exchangeCode("openai", {
+// 2. In your callback route: validate `state`, then exchange the code. Pass the
+//    SAME redirectUri, plus `state` (some providers require it in the exchange).
+const tokens = await oauth.exchangeCode("anthropic", {
+  mode: "loopback",
   code,
+  state,
   codeVerifier: pkce.codeVerifier,
-  redirectUri: "https://yourapp.com/api/oauth-ai/callback/openai",
+  redirectUri,
 });
 
 // 3. Later: get a valid (auto-refreshed) access token.
-await oauth.saveTokens("user_42:openai", tokens);
-const fresh = await oauth.getValidTokens("user_42:openai", "openai");
+await oauth.saveTokens("user_42:anthropic", tokens);
+const fresh = await oauth.getValidTokens("user_42:anthropic", "anthropic");
 ```
+
+## ⚠️ What actually works — flow modes & limits
+
+Because the default client ids are the vendors' **first-party** ids, you cannot
+point them at an arbitrary hosted redirect URI. Only two redirect shapes are
+registered, exposed as **modes**:
+
+| Mode | Redirect | Good for | Not for |
+| --- | --- | --- | --- |
+| `loopback` | `http://localhost:<port><path>` (Claude: `/callback`, port-agnostic · OpenAI: `/auth/callback`, **port 1455**) | CLI, desktop, local/dev web apps | hosted sites on a public domain |
+| `manual` | provider console callback + user copy-pastes a code (Claude only) | headless / any environment | smooth UX |
+
+A true **"button on a public website that redirects back to `yourapp.com`"**
+requires *your own* registered OAuth client — which the providers do **not**
+currently offer for subscription-backed access. Until they do, hosted apps must
+use `manual` mode or register their own client. The React `<ConnectButton />`
+and the example run locally via `loopback`.
 
 ## ⚠️ Read this first — Terms of Service
 
@@ -91,7 +113,10 @@ pnpm install
 pnpm build
 cd examples/nextjs
 cp .env.example .env.local   # then edit as needed
-pnpm dev                     # http://localhost:3000
+pnpm dev                     # http://localhost:3000 — "Connect with Claude" works here
+
+# OpenAI needs the Codex loopback port, so run the example on 1455 for it:
+PORT=1455 pnpm dev           # then use "Connect with OpenAI"
 ```
 
 ## Development

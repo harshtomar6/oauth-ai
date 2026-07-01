@@ -4,6 +4,7 @@ import type { TokenStore } from "./store.js";
 import type {
   AuthorizeOptions,
   ExchangeOptions,
+  OAuthMode,
   PKCEPair,
   ProviderConfig,
   Tokens,
@@ -23,6 +24,10 @@ export interface OAuthAIOptions {
 export interface StartAuthorization {
   url: string;
   state: string;
+  /** The mode used; persist so the callback exchanges with a matching config. */
+  mode: OAuthMode;
+  /** The resolved redirect URI; the token exchange must reuse the same value. */
+  redirectUri: string;
   /** Present when the provider uses PKCE. Persist until the callback. */
   pkce?: PKCEPair;
 }
@@ -72,15 +77,11 @@ export class OAuthAI {
     options: AuthorizeOptions = {},
   ): Promise<StartAuthorization> {
     const provider = this.getProvider(providerId);
-    const redirectUri =
-      options.redirectUri ??
-      provider.defaultRedirectUri ??
-      this.defaultRedirectUri;
-    if (!redirectUri) {
-      throw new Error(
-        `No redirectUri for provider "${providerId}". Provide one in the call, provider config, or client options.`,
-      );
-    }
+    const mode = this.resolveMode(provider, options.mode);
+    const redirectUri = this.resolveRedirectUri(provider, mode, {
+      redirectUri: options.redirectUri,
+      loopbackPort: options.loopbackPort,
+    });
 
     const state = options.state ?? randomState();
     const scopes = options.scopes ?? provider.defaultScopes;
@@ -106,12 +107,19 @@ export class OAuthAI {
     for (const [k, v] of Object.entries(provider.authorizeParams ?? {})) {
       params.set(k, v);
     }
+    if (mode === "manual") {
+      for (const [k, v] of Object.entries(provider.manualAuthorizeParams ?? {})) {
+        params.set(k, v);
+      }
+    }
     for (const [k, v] of Object.entries(options.extraParams ?? {})) {
       params.set(k, v);
     }
 
     const url = `${provider.authorizeUrl}?${params.toString()}`;
-    return pkce ? { url, state, pkce } : { url, state };
+    return pkce
+      ? { url, state, mode, redirectUri, pkce }
+      : { url, state, mode, redirectUri };
   }
 
   /** Exchange an authorization `code` for tokens. */
@@ -120,14 +128,22 @@ export class OAuthAI {
     options: ExchangeOptions,
   ): Promise<Tokens> {
     const provider = this.getProvider(providerId);
-    const redirectUri =
-      options.redirectUri ??
-      provider.defaultRedirectUri ??
-      this.defaultRedirectUri;
+    const mode = this.resolveMode(provider, options.mode);
+    const redirectUri = this.resolveRedirectUri(provider, mode, {
+      redirectUri: options.redirectUri,
+      loopbackPort: options.loopbackPort,
+      allowMissing: true,
+    });
+
+    // Some providers (e.g. Anthropic manual flow) return `code#fragment`;
+    // only the part before `#` is the authorization code.
+    const code = provider.stripCodeFragment
+      ? (options.code.split("#")[0] ?? options.code)
+      : options.code;
 
     const body = new URLSearchParams({
       grant_type: "authorization_code",
-      code: options.code,
+      code,
       client_id: provider.clientId,
     });
     if (redirectUri) body.set("redirect_uri", redirectUri);
@@ -139,6 +155,14 @@ export class OAuthAI {
         );
       }
       body.set("code_verifier", options.codeVerifier);
+    }
+    if (provider.includeStateInTokenRequest) {
+      if (!options.state) {
+        throw new Error(
+          `Provider "${providerId}" requires \`state\` in the token request, but none was supplied.`,
+        );
+      }
+      body.set("state", options.state);
     }
 
     return this.tokenRequest(provider, body);
@@ -157,6 +181,60 @@ export class OAuthAI {
     // Providers often omit the refresh token on refresh; carry it forward.
     if (!tokens.refreshToken) tokens.refreshToken = refreshToken;
     return tokens;
+  }
+
+  private resolveMode(
+    provider: ProviderConfig,
+    requested?: OAuthMode,
+  ): OAuthMode {
+    const supported = provider.supportedModes ?? ["loopback"];
+    const mode = requested ?? supported[0] ?? "loopback";
+    if (!supported.includes(mode)) {
+      throw new Error(
+        `Provider "${provider.id}" does not support mode "${mode}". Supported: ${supported.join(", ")}.`,
+      );
+    }
+    return mode;
+  }
+
+  /**
+   * Resolve the redirect URI for a mode. Precedence: explicit `redirectUri` >
+   * mode-derived value > provider/client defaults. In `loopback` mode the URI
+   * is `http://localhost:<port><loopbackPath>`.
+   */
+  private resolveRedirectUri(
+    provider: ProviderConfig,
+    mode: OAuthMode,
+    opts: {
+      redirectUri?: string;
+      loopbackPort?: number;
+      allowMissing?: boolean;
+    },
+  ): string {
+    const explicit =
+      opts.redirectUri ??
+      provider.defaultRedirectUri ??
+      this.defaultRedirectUri;
+    if (explicit) return explicit;
+
+    if (mode === "manual") {
+      if (provider.manualRedirectUri) return provider.manualRedirectUri;
+      if (opts.allowMissing) return "";
+      throw new Error(
+        `Provider "${provider.id}" has no manualRedirectUri configured for manual mode.`,
+      );
+    }
+
+    // loopback
+    const port = opts.loopbackPort ?? provider.loopbackPort;
+    const path = provider.loopbackPath ?? "/callback";
+    if (port === undefined) {
+      if (opts.allowMissing) return "";
+      throw new Error(
+        `Loopback mode for "${provider.id}" needs a port. Pass \`loopbackPort\`, set \`loopbackPort\` on the provider, or pass an explicit \`redirectUri\`.`,
+      );
+    }
+    return `http://localhost:${port}${path}`;
   }
 
   private requireStore(): TokenStore {

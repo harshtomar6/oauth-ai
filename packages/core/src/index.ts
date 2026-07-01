@@ -7,6 +7,7 @@ export type { TokenStore } from "./store.js";
 export type {
   AuthorizeOptions,
   ExchangeOptions,
+  OAuthMode,
   PKCEPair,
   ProviderConfig,
   Tokens,

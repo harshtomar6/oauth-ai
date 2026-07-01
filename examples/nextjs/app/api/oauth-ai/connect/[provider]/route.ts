@@ -1,18 +1,15 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import {
-  isSupportedProvider,
-  oauth,
-  redirectUri,
-} from "@/lib/oauth";
+import { isSupportedProvider, oauth } from "@/lib/oauth";
 
 /**
  * GET /api/oauth-ai/connect/:provider
- * Starts the OAuth flow: generates state + PKCE, stashes them in a short-lived
- * cookie, and redirects the user to the provider's authorize URL.
+ * Starts the loopback OAuth flow. The redirect URI must use the provider's
+ * registered loopback path (Claude: /callback, OpenAI: /auth/callback) on this
+ * app's own origin — arbitrary paths are rejected by the first-party clients.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { provider: string } },
 ) {
   const { provider } = params;
@@ -20,16 +17,26 @@ export async function GET(
     return NextResponse.json({ error: "unknown provider" }, { status: 404 });
   }
 
+  const origin = new URL(request.url).origin;
+  const cfg = oauth.getProvider(provider);
+  const redirectUri = `${origin}${cfg.loopbackPath ?? "/callback"}`;
+
   const { url, state, pkce } = await oauth.startAuthorization(provider, {
-    redirectUri: redirectUri(provider),
+    mode: "loopback",
+    redirectUri,
   });
 
   const response = NextResponse.redirect(url);
-  // Persist state + PKCE verifier until the callback. Use an encrypted/signed
-  // session in production; this demo uses a plain httpOnly cookie.
+  // Persist everything the callback needs. Use a signed/encrypted session in
+  // production; this demo uses a single short-lived httpOnly cookie.
   response.cookies.set(
-    `oauthai_${provider}`,
-    JSON.stringify({ state, codeVerifier: pkce?.codeVerifier }),
+    "oauthai_pending",
+    JSON.stringify({
+      provider,
+      state,
+      codeVerifier: pkce?.codeVerifier,
+      redirectUri,
+    }),
     {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -38,7 +45,6 @@ export async function GET(
       maxAge: 600,
     },
   );
-  // Touch cookies() so Next treats this route as dynamic.
   void cookies();
   return response;
 }

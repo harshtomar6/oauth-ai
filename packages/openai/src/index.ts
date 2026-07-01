@@ -23,6 +23,9 @@ export const OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token";
  */
 export const OPENAI_DEFAULT_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 
+/** Fixed loopback port the Codex client expects (`http://localhost:1455/auth/callback`). */
+export const OPENAI_LOOPBACK_PORT = 1455;
+
 export const OPENAI_DEFAULT_SCOPES = [
   "openid",
   "profile",
@@ -35,6 +38,8 @@ export interface OpenAIProviderOptions {
   clientSecret?: string;
   scopes?: string[];
   redirectUri?: string;
+  /** Override the loopback port (defaults to 1455). */
+  loopbackPort?: number;
 }
 
 /** Create an OpenAI provider with your own client id / options. */
@@ -52,6 +57,10 @@ export function createOpenAIProvider(
       OPENAI_DEFAULT_CLIENT_ID,
     defaultScopes: options.scopes ?? OPENAI_DEFAULT_SCOPES,
     usePKCE: true,
+    // Codex uses a loopback server on a fixed port 1455 at /auth/callback.
+    supportedModes: ["loopback"],
+    loopbackPort: options.loopbackPort ?? OPENAI_LOOPBACK_PORT,
+    loopbackPath: "/auth/callback",
   });
   if (options.clientSecret) config.clientSecret = options.clientSecret;
   if (options.redirectUri) config.defaultRedirectUri = options.redirectUri;

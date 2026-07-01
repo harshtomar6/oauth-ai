@@ -16,7 +16,10 @@ function readEnv(name: string): string | undefined {
  */
 export const ANTHROPIC_AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 export const ANTHROPIC_TOKEN_URL =
-  "https://console.anthropic.com/v1/oauth/token";
+  "https://platform.claude.com/v1/oauth/token";
+/** Fixed console callback used by the manual copy-paste flow. */
+export const ANTHROPIC_MANUAL_REDIRECT_URI =
+  "https://platform.claude.com/oauth/code/callback";
 
 /**
  * Claude Code's first-party client id. Works, but belongs to Anthropic's own
@@ -26,11 +29,12 @@ export const ANTHROPIC_TOKEN_URL =
 export const ANTHROPIC_DEFAULT_CLIENT_ID =
   "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
-export const ANTHROPIC_DEFAULT_SCOPES = [
-  "org:create_api_key",
-  "user:profile",
-  "user:inference",
-];
+/**
+ * Default scopes. `org:create_api_key` is intentionally omitted — it triggers
+ * "Unknown scope" errors on subscription (claude.ai) logins. Add it back via
+ * `createAnthropicProvider({ scopes })` only when targeting a Console org.
+ */
+export const ANTHROPIC_DEFAULT_SCOPES = ["user:profile", "user:inference"];
 
 export interface AnthropicProviderOptions {
   clientId?: string;
@@ -54,6 +58,14 @@ export function createAnthropicProvider(
       ANTHROPIC_DEFAULT_CLIENT_ID,
     defaultScopes: options.scopes ?? ANTHROPIC_DEFAULT_SCOPES,
     usePKCE: true,
+    // Loopback: port-agnostic, path must be exactly `/callback` (RFC 8252).
+    supportedModes: ["loopback", "manual"],
+    loopbackPath: "/callback",
+    manualRedirectUri: ANTHROPIC_MANUAL_REDIRECT_URI,
+    manualAuthorizeParams: { code: "true" },
+    // Anthropic's token endpoint requires `state` and returns `code#fragment`.
+    includeStateInTokenRequest: true,
+    stripCodeFragment: true,
   });
   if (options.clientSecret) config.clientSecret = options.clientSecret;
   if (options.redirectUri) config.defaultRedirectUri = options.redirectUri;
