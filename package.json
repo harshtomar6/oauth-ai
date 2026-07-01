@@ -1,0 +1,22 @@
+{
+  "name": "oauth-ai-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OAuth for AI accounts — add 'Connect with OpenAI' / 'Connect with Claude' to any app.",
+  "license": "MIT",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter \"./packages/*\" build",
+    "dev": "pnpm -r --parallel --filter \"./packages/*\" dev",
+    "typecheck": "pnpm -r --filter \"./packages/*\" typecheck",
+    "clean": "pnpm -r exec rm -rf dist .turbo node_modules/.cache",
+    "example": "pnpm --filter oauth-ai-example-nextjs dev"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.3"
+  }
+}
