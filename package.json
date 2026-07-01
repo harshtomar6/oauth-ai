@@ -12,11 +12,14 @@
     "build": "pnpm -r --filter \"./packages/*\" build",
     "dev": "pnpm -r --parallel --filter \"./packages/*\" dev",
     "typecheck": "pnpm -r --filter \"./packages/*\" typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "pnpm -r exec rm -rf dist .turbo node_modules/.cache",
     "example": "pnpm --filter oauth-ai-example-nextjs dev"
   },
   "devDependencies": {
     "tsup": "^8.3.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
   }
 }
